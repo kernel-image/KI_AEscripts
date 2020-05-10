@@ -78,7 +78,7 @@ function chooseLayers(comp){
 function layerLoop(laerz){
     //loop through all layers
     for (var il = 0; il<laerz.length; il++){
-        var laer = {name : laerz[il].name, index : laerz[il].index};
+        var laer = {name : laerz[il].name, index : laerz[il].index, inPoint: laerz[il].inPoint, outPoint: laerz[il].outPoint, blendMode: laerz[il].blendingMode};
         layerVal(laerz[il], laer);
         //writelayerinfo(laer);
         animation(laerz[il], laer);
@@ -104,7 +104,9 @@ function animation(layer, laer){
                 alert('unexpected property: '+ props[p].name);
             }
             if(props[p].expressionEnabled){
+            
                 //get values at intervals of 1 frame while t<out point
+                
                 smpleIntvl = layer.containingComp.frameDuration;
                 for (var t = layer.inPoint; t<layer.outPoint; t+= smpleIntvl){
                     if (p==0){
@@ -112,7 +114,7 @@ function animation(layer, laer){
                     }else if (p==1){
                         laer['rotation'].push({time:t, value:props[p].valueAtTime(t, false), isKey:false, interpolateIn: null, interpolateOut: null});
                     }else if (p==2){
-                        laer['scale'].push({time:t, value:props[p].valueAtTime(t, false)[0], isKey:false, interpolateIn: null, interpolateOut: null});
+                        laer['scale'].push({time:t, value:[props[p].valueAtTime(t, false)[0], props[p].valueAtTime(t, false)[1]], isKey:false, interpolateIn: null, interpolateOut: null});
                     }else if (p==3){
                         laer['opacity'].push({time:t, value:props[p].valueAtTime(t, false)[0], isKey:false, interpolateIn: null, interpolateOut: null});
                     }else{
@@ -120,35 +122,39 @@ function animation(layer, laer){
                     }
                     writelayerinfo(laer);
                 }
+                
             }else{
+            
                 //loop through keys getting time from keyTime()
+                
                 var ver =  app.version;
                 if (ver.split('.')[0] == '13'){
                     var intObj = {'6212':'linear', '6213':'bezier', '6214':'hold'};
                 }else if (ver.split('.')[0] == '14'){
                     var intObj = {'6612':'linear', '6613':'bezier', '6614':'hold'};
+                }else if (Number(ver.split('.')[0]) > 14){
+                    var intObj = {'6612':'linear', '6613':'bezier', '6614':'hold'};
                 }else{
-                    alert('missing keyframe interpolation value ennumeration dictionary, values will be ommitted.');
+                    alert('missing keyframe interpolation value enumeration dictionary, values will be ommitted.');
                 }
                 var intIn = new String();
                 var intOut = new String();
+
                 for (var k = 1; k<=props[p].numKeys; k++){
+                	var kin = props[p].keyInInterpolationType(k);
+                	var kout = props[p].keyOutInterpolationType(k);
+                	//writeLn(kin);
+                    //writeLn(kout);
+                    intIn = intObj[kin];
+                    intOut = intObj[kout];
                     if (p==0){
-                        intIn = intObj[props[p].keyInInterpolationType(k)];
-                        intOut = intObj[props[p].keyOutInterpolationType(k)];
                         laer['position'].push({time:props[p].keyTime(k), value:[props[p].valueAtTime(props[p].keyTime(k), false)[0], props[p].valueAtTime(props[p].keyTime(k), false)[1]], isKey:true, interpolateIn: intIn, interpolateOut: intOut});
                     }else if (p==1){
-                        intIn = intObj[props[p].keyInInterpolationType(k)];
-                        intOut = intObj[props[p].keyOutInterpolationType(k)];
                         laer['rotation'].push({time:props[p].keyTime(k), value:props[p].valueAtTime(props[p].keyTime(k), false), isKey:true, interpolateIn: intIn, interpolateOut: intOut});
                     }else if (p==2){
-                        intIn = intObj[props[p].keyInInterpolationType(k)];
-                        intOut = intObj[props[p].keyOutInterpolationType(k)];
-                        laer['scale'].push({time:props[p].keyTime(k), value:props[p].valueAtTime(props[p].keyTime(k), false)[0], isKey:true, interpolateIn: intIn, interpolateOut: intOut});
+                        laer['scale'].push({time:props[p].keyTime(k), value:[props[p].valueAtTime(props[p].keyTime(k), false)[0], props[p].valueAtTime(props[p].keyTime(k), false)[1]], isKey:true, interpolateIn: intIn, interpolateOut: intOut});
                     }else if (p==3){
-                        intIn = intObj[props[p].keyInInterpolationType(k)];
-                        intOut = intObj[props[p].keyOutInterpolationType(k)];
-                        laer['opacity'].push({time:props[p].keyTime(k), value:props[p].valueAtTime(props[p].keyTime(k), false)[0], isKey:true, interpolateIn: intIn, interpolateOut: intOut});
+                        laer['opacity'].push({time:props[p].keyTime(k), value:props[p].valueAtTime(props[p].keyTime(k), false), isKey:true, interpolateIn: intIn, interpolateOut: intOut});
                     }else{
                         alert('unexpected property: '+ props[p].name);
                     }
@@ -160,7 +166,7 @@ function animation(layer, laer){
 function layerVal(layer, obj){
     obj['position'] = [{time:0, value:[layer.transform.position.value[0],layer.transform.position.value[1]]}];
     obj['rotation'] = [{time:0, value:layer.transform.rotation.value}];
-    obj['scale'] = [{time:0, value:layer.transform.scale.value[0]}];
+    obj['scale'] = [{time:0, value:[layer.transform.scale.value[0],layer.transform.scale.value[1]]}];
     obj['opacity'] = [{time:0, value:layer.transform.opacity.value}];
 }
 function mkfn(){
