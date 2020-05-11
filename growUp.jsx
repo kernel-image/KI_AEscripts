@@ -57,19 +57,70 @@ function chooseLayers(comp){
 
 function packBags(layer){
     if (layer.parent != null){
-        var cProps = [layer.transform.position, layer.transform.scale, layer.transform.rotation, layer.transform.opacity];
+        var cProps = [layer.transform.position, layer.transform.rotation, layer.transform.scale, layer.transform.opacity];
         var parent = layer.parent;
-        var parentName = parent.name;
-        var pProps = [layer.transform.position, layer.transform.scale, layer.transform.rotation, layer.transform.opacity];
-        var pAnim = false;
-        for (var i = 1; i < pProps.length - 1; i++){
-            if (pProps[i].isTimeVarying){
-                pAnim = true;
-                break;
+        var parentID = parent.index;
+        var pProps = [parent.transform.position, parent.transform.rotation, parent.transform.scale, parent.transform.opacity];
+        var pAnim = [false, false, false, false];
+        var transTM = [];
+        var posA, tM;
+        var smpleIntvl = layer.containingComp.frameDuration;
+        for (var i = 1; i < pProps.length; i++){
+            if (pProps[i-1].isTimeVarying){
+                //writeLn(pProps[i-1].name + " is animated, writing to pAnim " + i);
+                pAnim[i] = true;
+                pAnim[0] = true;
             }
         }
         var convert = confirm('convert expressions to keyframes?');
         layer.parent = null;
+        //TODO: check for identical world space anchor position and skip frame sampling if true
+        
+        if (pAnim[2] || pAnim[3]){
+            //sample frames
+            posA = sampleFrames(layer, pProps, smpleIntvl, pAnim);
+            //get transform matrix per frame
+            for (var p = 0; p<pProps.length - 1; p++){
+                transTM[p] = [];
+                for (var k = 0; k<posA.length; k++){
+                    if (p== 0){
+                         
+                         transTM[p].push(idMtx()); // expression will handle this transform
+                            
+                    }else if (p == 1 ){
+                    
+                        if (pAnim[p+1]){
+                        
+                            writeLn("rotate: " + posA[k][1]/Math.PI * 180);
+                            tM = mtxMult(mtxMult(transMtx(-posA[k][4][0], -posA[k][4][1]), rotMtx(posA[k][1])), transMtx(posA[k][4][0], posA[k][4][1]));
+                            transTM[p].push(tM);
+                            
+                        }else{
+                            
+                            transTM[p].push(idMtx()); // no position offset
+                        }
+                        
+                    }else if (p == 2){
+                    
+                        if (pAnim[p+1]){
+                            //writeLn("offset: " + posA[k][5][0] + " " + posA[k][5][1]);
+                            tM = mtxMult(mtxMult(transMtx(-posA[k][4][0], -posA[k][4][1]), sclMtx(posA[k][5][0], posA[k][5][1])), transMtx(posA[k][4][0], posA[k][4][1]));
+                            transTM[p].push(tM);
+                            
+                        }else{
+                        
+                            transTM[p].push(idMtx()); // no position offset
+                        }
+                    }
+                }
+            }
+            for (var k = 0; k<posA.length; k++){
+                tM = mtxMult(mtxMult(transTM[0][k], transTM[1][k]), transTM[2][k]);
+                posA[k][2] = vecTrans(cProps[0].valueAtTime(posA[k][3], false), tM);
+                //writeLn(posA[k][0][0] + ", " + posA[k][0][1] + " => " + posA[k][2][0] + ", " + posA[k][2][1]);
+                cProps[0].setValueAtTime(posA[k][3], posA[k][2]);
+            }
+        }
         for (var i = 0; i<cProps.length; i++){
             var property = cProps[i].name.toLowerCase();
             //handle pre-existing expressions
@@ -81,20 +132,10 @@ function packBags(layer){
                     continue;
                 }
             }
-            try{
-                if (pAnim && (i != 0 || i != 3)){
-                    for(int j = 1; j <= pProps[i].numKeys; j++){
-                    
-                        var t = cProps[i].keyTime(j);
-                        var val = cProps[0].position.valueAtTime(t) * getMatrix(parent.transform.position.valueAtTime(t));
-                        cProps[0].position.setValueAtTime(t, val);
-                    }
-                        
-                
-                }else{
-                    cProps[i].expression = parentingExpression(property, parentName);
-                }
-                
+            try
+            {
+                cProps[i].expression = parentingExpression(property, parentID);
+  
             }catch(err){
                 //alert(property + ' expressions are locked. try another method.');
                 alert(err.message);
@@ -119,9 +160,8 @@ function convertToKeyframes(property){
 }
 
 
-function parentingExpression(property, parentName){
-    return 'transform.'+property+'+thisComp.layer("'+parentName+'").transform.'+property+'-transform.'+property+';';
-    //transform.position+thisComp.layer("Shape Layer 2").transform.position-transform.position;
+function parentingExpression(property, parentID){
+    return 'transform.'+property+' - thisComp.layer('+parentID+').transform.'+property+'.valueAtTime(0) + thisComp.layer('+parentID+').transform.'+property+';';
 }
 
 
@@ -189,8 +229,31 @@ function sclMtx(factorX, factorY){
 }
 
 
+function sampleFrames(l, pProps, frameDur, ac){
+//function sampleFrames(l, p, r, s, frameDur, g, ac)
+    var p = pProps[0];
+    var r = pProps[1];
+    var s = pProps[2];
+    var g = pProps[0].valueAtTime(0, false);
+    var a = [];
+    var gOff, pPos, pRot, pScl;
+    var oScl = s.value/100;
+    var oRot = (Math.PI/180)*r.value;
+    var oPos = p.valueAtTime(l.inPoint, false);
+    for (var k = l.inPoint; k<l.outPoint; k+= frameDur){
+        pPos = (ac[1] == true) ? p.valueAtTime(k, false) : oPos;
+        pRot = ac[2] == true ? (Math.PI/180)*r.valueAtTime(k, false) : oRot;
+        pScl = (ac[3] == true) ? s.valueAtTime(k, false)/100 : oScl;
+        gOff = (k == l.inPoint || ac[0] == false) ? [g[0], g[1]] : [g[0]-(oPos[0]-pPos[0]), g[1]-(oPos[1]-pPos[1])];
+        a.push([pPos, pRot, [null,null], k, gOff, pScl]);
+    }
+    return a;
+}
+
+
 function growUp(comp){
     if(chooseLayers(comp)){
+        comp.time = 0;
         for (var ill = 0; ill<laerz.length; ill++){
             packBags(laerz[ill]);
         }
