@@ -91,7 +91,7 @@ function packBags(layer){
                     
                         if (pAnim[p+1]){
                         
-                            writeLn("rotate: " + posA[k][1]/Math.PI * 180);
+                            //writeLn("rotate: " + posA[k][1]/Math.PI * 180);
                             tM = mtxMult(mtxMult(transMtx(-posA[k][4][0], -posA[k][4][1]), rotMtx(posA[k][1])), transMtx(posA[k][4][0], posA[k][4][1]));
                             transTM[p].push(tM);
                             
@@ -114,11 +114,17 @@ function packBags(layer){
                     }
                 }
             }
+            var nps = [];
             for (var k = 0; k<posA.length; k++){
                 tM = mtxMult(mtxMult(transTM[0][k], transTM[1][k]), transTM[2][k]);
-                posA[k][2] = vecTrans(cProps[0].valueAtTime(posA[k][3], false), tM);
-                //writeLn(posA[k][0][0] + ", " + posA[k][0][1] + " => " + posA[k][2][0] + ", " + posA[k][2][1]);
-                cProps[0].setValueAtTime(posA[k][3], posA[k][2]);
+                var cp = cProps[0].valueAtTime(posA[k][3], false);
+                posA[k][2] = vecTrans(cp, tM);
+                //writeLn(cp[0] + ", " + cp[1] + " => " + posA[k][2][0] + ", " + posA[k][2][1]);
+                nps.push([posA[k][3], posA[k][2]]);
+            }
+            for (var k = 0; k < nps.length; k++){
+            
+                cProps[0].setValueAtTime(nps[k][0], nps[k][1]);
             }
         }
         for (var i = 0; i<cProps.length; i++){
